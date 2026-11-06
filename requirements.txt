@@ -4,3 +4,4 @@ requests>=2.31
 
 # Only needed if you switch DB_ENGINE=mysql in your .env (see README)
 mysqlclient>=2.2
+gunicorn
