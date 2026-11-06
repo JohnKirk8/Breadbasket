@@ -1,0 +1,233 @@
+{% extends "inventory/base.html" %}
+{% block title_suffix %} — Production{% endblock %}
+{% block content %}
+
+<div class="card-grid">
+  <div class="card">
+    <h3>Target Output</h3>
+    <div class="value">{{ total_target }}</div>
+  </div>
+  <div class="card">
+    <h3>Catalog</h3>
+    <div class="value">{{ active_bread_count }}</div>
+  </div>
+</div>
+
+<div class="split-layout">
+  <div class="col-main table-container">
+    <div class="table-header">
+      <span>Production Targets</span>
+    </div>
+    <div class="table-scroll-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Bread</th>
+            <th>Recommended</th>
+            <th>Source</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td>
+              <strong>{{ row.product.name }}</strong>
+              <div style="font-size:0.72rem; color:var(--text-muted);">{{ row.product.shelf_life_days }} days</div>
+            </td>
+            <td>
+              {% if row.recommendation %}
+              <span class="status-pill pill-green" style="font-size:0.85rem;">
+                {{ row.recommendation.recommended_quantity }}
+              </span>
+              {% else %}
+              <span class="status-pill pill-red">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if row.recommendation %}
+              {% if row.recommendation.source == 'gemini' %}
+              <span class="status-pill pill-green">Gemini</span>
+              {% else %}
+              <span class="status-pill pill-amber">Average</span>
+              {% endif %}
+              {% else %}
+              -
+              {% endif %}
+            </td>
+            <td>
+              <small style="color:var(--text-dark); line-height:1.3; display:block;">
+                {% if row.recommendation %}
+                {{ row.recommendation.reason }}
+                {% else %}
+                —
+                {% endif %}
+              </small>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if is_admin or is_baker %}
+    <form method="post" action="{% url 'recalculate_ai_forecast' %}" class="analyze-form">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-accent">Analyze</button>
+    </form>
+    {% endif %}
+  </div>
+
+  {% if is_admin or is_baker %}
+  <div class="col-side card" style="height: fit-content;">
+    <h3 style="border-bottom: 2px solid var(--border-color); padding-bottom: 8px; margin-bottom: 14px;">
+      Create Batch
+    </h3>
+
+    <form method="post" action="{% url 'log_batch' %}" id="createBatchForm">
+      {% csrf_token %}
+
+      <div class="form-group">
+        <label for="{{ batch_form.product.id_for_label }}">Product</label>
+        {{ batch_form.product }}
+      </div>
+
+      <div class="form-group">
+        <label for="{{ batch_form.quantity_produced.id_for_label }}">Quantity</label>
+        {{ batch_form.quantity_produced }}
+      </div>
+
+      <div class="form-group">
+        <label for="{{ batch_form.production_date.id_for_label }}">Date</label>
+        {{ batch_form.production_date }}
+      </div>
+
+      <div class="form-group">
+        <label for="{{ batch_form.shelf_life_days.id_for_label }}">Shelf Life (days)</label>
+        {{ batch_form.shelf_life_days }}
+      </div>
+
+      <div id="expirationPreviewBox"
+        style="background:#f8f4ed; border:1px solid #e0d4c3; border-radius:6px; padding:10px; margin-bottom:14px; font-size:0.78rem;">
+        <span style="font-weight:bold; color:var(--brand-dark);">Expires</span>
+        <div id="calculatedExpDate"
+          style="color:var(--price-green); font-weight:bold; font-size:0.9rem; margin-top:2px;">
+          —
+        </div>
+      </div>
+
+      <button type="submit" class="btn" style="width: 100%; padding:10px; font-size:0.88rem;">
+        Create Batch
+      </button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+{% if is_admin or is_baker %}
+<div class="table-container" style="margin-top:16px;">
+  <div class="table-header"><span>Batch Tracker</span></div>
+  <div class="table-scroll-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Batch</th>
+          <th>Product</th>
+          <th>Produced</th>
+          <th>Sold</th>
+          <th>Remaining</th>
+          <th>Waste</th>
+          <th>Expires</th>
+          <th>Status</th>
+          <th>Record Sale</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for batch in batches %}
+        <tr>
+          <td><strong>B-{{ batch.id }}</strong></td>
+          <td>{{ batch.product.name }}</td>
+          <td>{{ batch.original_quantity }}</td>
+          <td>{{ batch.sold_quantity }}</td>
+          <td><strong>{{ batch.remaining_quantity }}</strong></td>
+          <td>
+            {% if batch.waste_quantity > 0 %}
+            <span style="color:var(--alert-red); font-weight:bold;">{{ batch.waste_quantity }}</span>
+            {% else %}0{% endif %}
+          </td>
+          <td style="font-size:0.78rem;">{{ batch.expiration_date|date:"Y-m-d" }}</td>
+          <td>
+            {% if batch.status == 'active' %}<span class="status-pill pill-green">Active</span>
+            {% elif batch.status == 'expired' %}<span class="status-pill pill-red">Expired</span>
+            {% else %}<span class="status-pill pill-red">Wasted</span>{% endif %}
+          </td>
+          <td>
+            {% if batch.status == 'active' and batch.remaining_quantity > 0 %}
+            <form method="post" action="{% url 'record_batch_sale' batch.id %}"
+              style="margin:0; display:flex; gap:4px; align-items:center;">
+              {% csrf_token %}
+              <input type="number" name="quantity_sold" min="1" max="{{ batch.remaining_quantity }}"
+                value="1" style="width:60px; padding:4px 6px; font-size:0.78rem; margin:0;" required>
+              <button type="submit" class="btn" style="padding:4px 8px; font-size:0.75rem;">Sell</button>
+            </form>
+            {% else %}
+            <span style="color:var(--text-muted); font-size:0.75rem;">-</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9" style="text-align:center; padding:20px; color:var(--text-muted);">No batches recorded yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<script>
+  var productShelfLife = {};
+  {% for product in products %}productShelfLife["{{ product.id }}"] = {{ product.shelf_life_days }};{% endfor %}
+
+  function updateExpirationPreview() {
+    var productSelect = document.getElementById('batch_product_select');
+    var prodDateInput = document.getElementById('id_production_date');
+    var shelfOverrideInput = document.getElementById('id_shelf_life_days');
+    var previewEl = document.getElementById('calculatedExpDate');
+
+    if (!productSelect || !prodDateInput || !previewEl) return;
+
+    var productId = productSelect.value;
+    var prodDateVal = prodDateInput.value;
+    if (!productId || !prodDateVal) {
+      previewEl.innerText = "—";
+      previewEl.style.color = "var(--text-muted)";
+      return;
+    }
+
+    var defaultShelfLife = productShelfLife[productId] || 3;
+    var shelfLife = parseInt(shelfOverrideInput.value) || defaultShelfLife;
+
+    var parts = prodDateVal.split('-');
+    if (parts.length === 3) {
+      var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      d.setDate(d.getDate() + shelfLife);
+      var expStr = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+      previewEl.innerText = expStr;
+      previewEl.style.color = "var(--price-green)";
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var productSelect = document.getElementById('batch_product_select');
+    var prodDateInput = document.getElementById('id_production_date');
+    var shelfOverrideInput = document.getElementById('id_shelf_life_days');
+
+    if (productSelect) productSelect.addEventListener('change', updateExpirationPreview);
+    if (prodDateInput) prodDateInput.addEventListener('input', updateExpirationPreview);
+    if (shelfOverrideInput) shelfOverrideInput.addEventListener('input', updateExpirationPreview);
+
+    updateExpirationPreview();
+  });
+</script>
+
+{% endblock %}

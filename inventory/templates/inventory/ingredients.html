@@ -1,0 +1,314 @@
+{% extends "inventory/base.html" %}
+{% block title_suffix %} — Raw Ingredients{% endblock %}
+{% block content %}
+
+<style>
+/* MODAL OVERLAY & FIXED FORM LAYOUT STYLES */
+details.edit-modal-trigger {
+  display: inline-block;
+  margin: 0;
+}
+
+details.edit-modal-trigger summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+details.edit-modal-trigger summary::-webkit-details-marker {
+  display: none;
+}
+
+details.edit-modal-trigger[open] .modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.modal-card {
+  background: #ffffff;
+  border-radius: 10px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.25);
+  padding: 22px;
+  border: 1px solid var(--border-color);
+  animation: modalFadeIn 0.15s ease-out;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 10px;
+  margin-bottom: 16px;
+}
+
+.modal-header h3 {
+  font-size: 1.05rem;
+  color: var(--brand-dark);
+  font-weight: 700;
+  margin: 0;
+}
+
+.close-modal-btn {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.close-modal-btn:hover {
+  color: var(--alert-red);
+}
+
+/* FIX: VERTICAL FORM GROUP STACKING TO PREVENT HORIZONTAL OVERFLOW */
+.modal-card .form-group {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  margin-bottom: 12px;
+  width: 100%;
+}
+
+.modal-card .form-group label {
+  display: block;
+  width: 100%;
+  margin-bottom: 4px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.modal-card .form-group input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 0;
+  padding: 8px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.btn-secondary {
+  background-color: #6b7280;
+  color: #ffffff;
+}
+
+.btn-secondary:hover {
+  background-color: #4b5563;
+}
+
+.action-flex-container {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  white-space: nowrap;
+}
+</style>
+
+<div class="card-grid">
+  <div class="card">
+    <h3>Ingredients</h3>
+    <div class="value">{{ ingredients|length }}</div>
+  </div>
+  <div class="card">
+    <h3>Low Stock</h3>
+    <div class="value" style="color: var(--alert-red);">{{ low_stock_count }}</div>
+  </div>
+</div>
+
+<div class="split-layout">
+  <!-- INGREDIENTS TABLE LIST -->
+  <div class="col-main table-container">
+    <div class="table-header">
+      <span>Raw Ingredients Inventory</span>
+    </div>
+    <div class="table-scroll-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Ingredient</th>
+            <th>Current Stock</th>
+            <th>Min Threshold</th>
+            <th>Status</th>
+            <th>Supplier</th>
+            {% if is_admin or is_inventory %}
+            <th style="min-width: 250px;">Actions</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for ing in ingredients %}
+          <tr id="ing-row-{{ ing.id }}">
+            <td>
+              <strong>{{ ing.name }}</strong>
+              <div style="font-size:0.72rem; color:var(--text-muted);">Unit: {{ ing.unit }}</div>
+            </td>
+            <td>
+              <span style="font-size:1.05rem; font-weight:bold; color:var(--brand-dark);">
+                {{ ing.stock }}
+              </span>
+              <span style="font-size:0.75rem; color:var(--text-muted);">{{ ing.unit }}</span>
+            </td>
+            <td>{{ ing.low_stock_threshold }} {{ ing.unit }}</td>
+            <td>
+              {% if ing.is_low_stock %}
+              <span class="status-pill pill-red">LOW STOCK</span>
+              {% else %}
+              <span class="status-pill pill-green">Sufficient</span>
+              {% endif %}
+            </td>
+            <td style="font-size:0.8rem; color:var(--text-dark);">
+              {{ ing.supplier|default:"-" }}
+            </td>
+
+            {% if is_admin or is_inventory %}
+            <td>
+              <div class="action-flex-container">
+                <!-- QUICK STOCK UPDATE FORM -->
+                <form method="post" action="{% url 'update_ingredient_stock' %}" style="display:flex; gap:4px; align-items:center; margin:0;">
+                  {% csrf_token %}
+                  <input type="hidden" name="ingredient_id" value="{{ ing.id }}">
+                  <input 
+                    type="number" 
+                    name="stock" 
+                    value="{{ ing.stock }}" 
+                    step="0.001" 
+                    min="0"
+                    style="width:80px; padding:4px 6px; margin:0; font-size:0.82rem;" 
+                    required
+                  >
+                  <button type="submit" class="btn" style="padding:4px 8px; font-size:0.75rem;">
+                    Set Stock
+                  </button>
+                </form>
+
+                <!-- EDIT DETAILS MODAL DIALOG TRIGGER -->
+                <details class="edit-modal-trigger">
+                  <summary class="btn" style="padding: 4px 8px; font-size: 0.75rem; background-color: var(--brand-primary); color: white;">Edit Details</summary>
+                  <div class="modal-backdrop" onclick="if(event.target === this) this.closest('details').removeAttribute('open');">
+                    <div class="modal-card">
+                      <div class="modal-header">
+                        <h3>Edit Ingredient</h3>
+                        <span class="close-modal-btn" onclick="this.closest('details').removeAttribute('open');" title="Close">&times;</span>
+                      </div>
+                      <form method="post" action="{% url 'update_ingredient' ing.id %}">
+                        {% csrf_token %}
+                        <div class="form-group">
+                          <label>Ingredient Name</label>
+                          <input type="text" name="name" value="{{ ing.name }}" required class="form-control">
+                        </div>
+                        <div class="form-group">
+                          <label>Measurement Unit</label>
+                          <input type="text" name="unit" value="{{ ing.unit }}" required class="form-control">
+                        </div>
+                        <div class="form-group">
+                          <label>Current Stock</label>
+                          <input type="number" step="0.001" min="0" name="stock" value="{{ ing.stock }}" required class="form-control">
+                        </div>
+                        <div class="form-group">
+                          <label>Low Stock Limit</label>
+                          <input type="number" step="0.001" min="0" name="low_stock_threshold" value="{{ ing.low_stock_threshold }}" required class="form-control">
+                        </div>
+                        <div class="form-group">
+                          <label>Supplier</label>
+                          <input type="text" name="supplier" value="{{ ing.supplier }}" class="form-control">
+                        </div>
+                        <div style="display: flex; gap: 10px; margin-top: 16px;">
+                          <button type="submit" class="btn" style="flex: 1; padding: 8px;">Save Changes</button>
+                          <button type="button" class="btn btn-secondary" style="flex: 1; padding: 8px;" onclick="this.closest('details').removeAttribute('open');">Cancel</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                </details>
+
+                <!-- DELETE INGREDIENT FORM -->
+                <form method="post" action="{% url 'delete_ingredient' ing.id %}" style="margin: 0;" onsubmit="return confirm('Are you sure you want to delete ingredient {{ ing.name }}?');">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-danger" style="padding: 4px 8px; font-size: 0.75rem;">Delete</button>
+                </form>
+              </div>
+            </td>
+            {% endif %}
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">No raw ingredients available.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ADD NEW INGREDIENT SIDEBAR FORM -->
+  {% if is_admin or is_inventory %}
+  <div class="col-side card" style="height: fit-content;">
+    <h3 style="border-bottom: 2px solid var(--border-color); padding-bottom: 8px; margin-bottom: 14px;">
+      Add New Ingredient
+    </h3>
+    <form method="post" action="{% url 'add_ingredient' %}">
+      {% csrf_token %}
+
+      <div class="form-group">
+        <label for="{{ ingredient_form.name.id_for_label }}">Ingredient Name</label>
+        {{ ingredient_form.name }}
+      </div>
+
+      <div class="form-group">
+        <label for="{{ ingredient_form.unit.id_for_label }}">Measurement Unit</label>
+        {{ ingredient_form.unit }}
+      </div>
+
+      <div class="form-group">
+        <label for="{{ ingredient_form.stock.id_for_label }}">Initial Stock</label>
+        {{ ingredient_form.stock }}
+      </div>
+
+      <div class="form-group">
+        <label for="{{ ingredient_form.low_stock_threshold.id_for_label }}">Low Stock Limit</label>
+        {{ ingredient_form.low_stock_threshold }}
+      </div>
+
+      <div class="form-group">
+        <label for="{{ ingredient_form.supplier.id_for_label }}">Supplier (optional)</label>
+        {{ ingredient_form.supplier }}
+      </div>
+
+      <button type="submit" class="btn" style="width: 100%; padding: 10px; font-size: 0.88rem; margin-top: 6px;">
+        Create Ingredient
+      </button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,6 @@
+Django>=4.2,<6.0
+python-decouple>=3.8
+requests>=2.31
+
+# Only needed if you switch DB_ENGINE=mysql in your .env (see README)
+mysqlclient>=2.2

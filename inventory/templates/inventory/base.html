@@ -1,0 +1,195 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BreadBasket (BB App){% block title_suffix %}{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'inventory/css/style.css' %}?v=16">
+</head>
+
+<body>
+
+  <div class="app-layout">
+    <!-- LEFT SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand-title">
+        <img 
+          src="{% static 'inventory/images/logo.png' %}" 
+          alt="BreadBasket Logo" 
+          class="brand-logo"
+        >
+        <h1>BREADBASKET<br>(BB APP)</h1>
+        <p>Bakery Inventory &amp; Production Management System</p>
+      </div>
+
+      {% if user.is_authenticated %}
+      <nav class="sidebar-nav">
+        {% if is_admin or is_baker %}
+        <a href="{% url 'ai_production' %}" class="nav-tab {% if active_tab == 'ai_production' %}active{% endif %}">
+          <span>🤖</span> Production
+        </a>
+        {% endif %}
+
+        <a href="{% url 'catalog' %}" class="nav-tab {% if active_tab == 'catalog' %}active{% endif %}">
+          <span>🍞</span> Catalog
+        </a>
+
+        <a href="{% url 'ingredients' %}" class="nav-tab {% if active_tab == 'ingredients' %}active{% endif %}">
+          <span>📦</span> Ingredients
+        </a>
+
+        {% if is_admin or is_inventory %}
+        <a href="{% url 'sales' %}" class="nav-tab {% if active_tab == 'sales' %}active{% endif %}">
+          <span>🛒</span> Sales
+        </a>
+        {% endif %}
+
+        {% if is_admin %}
+        <a href="{% url 'reports' %}" class="nav-tab {% if active_tab == 'reports' %}active{% endif %}">
+          <span>📊</span> Reports
+        </a>
+        {% endif %}
+      </nav>
+
+      <!-- SIDEBAR FOOTER: USER CARD WIDGET -->
+      <div class="sidebar-footer">
+        <div class="user-card">
+          <div class="user-details">
+            <div class="user-avatar">{{ user.get_username|slice:":1"|upper }}</div>
+            <div class="user-info">
+              <span class="username">{{ user.get_username }}</span>
+              <span class="role-badge">
+                {% if is_admin %}Administrator{% elif is_baker %}Baker{% elif is_inventory %}Staff{% else %}User{% endif %}
+              </span>
+            </div>
+          </div>
+
+          <div class="user-actions">
+            <!-- Notification Bell -->
+            <div class="notification-container">
+              <button type="button" id="notificationBellBtn" class="notification-bell-btn" aria-label="Notifications"
+                data-alert-key="{% for item in low_stock_items %}{{ item.id }}{% if not forloop.last %},{% endif %}{% endfor %}">
+                <svg class="bell-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M18 8A6 6 0 1 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+                {% if low_stock_count > 0 %}
+                <span class="notification-dot" id="notificationDot"></span>
+                {% endif %}
+              </button>
+            </div>
+
+            <!-- Logout Button -->
+            <form method="post" action="{% url 'logout' %}" style="margin:0; flex:1;">
+              {% csrf_token %}
+              <button type="submit" class="logout-btn">
+                <svg style="width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:2;" viewBox="0 0 24 24">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                  <polyline points="16 17 21 12 16 7"></polyline>
+                  <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                Logout
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- NOTIFICATION FLYOUT SIDEBAR PANEL (Opens next to main sidebar) -->
+      <div id="notificationDropdown" class="notification-dropdown">
+        <div class="notification-header">
+          <span>Low Stock Alerts</span>
+          <button type="button" id="closeNotifBtn" class="close-notif-btn" aria-label="Close">&times;</button>
+        </div>
+        <ul class="notification-list">
+          {% if low_stock_items %}
+          {% for item in low_stock_items %}
+          <li class="notification-item alert-low">
+            <span class="alert-msg">Low-stock alert: {{ item.name }} is running low.</span>
+            <span class="alert-meta">{{ item.stock }} {{ item.unit }} / {{ item.low_stock_threshold }} {{ item.unit }}</span>
+          </li>
+          {% endfor %}
+          {% else %}
+          <li class="notification-item notification-empty">No low stock alerts</li>
+          {% endif %}
+        </ul>
+        <div class="notification-footer">
+          <a href="{% url 'ingredients' %}">Manage Ingredients</a>
+        </div>
+      </div>
+      {% endif %}
+    </aside>
+
+    <!-- MAIN CONTENT AREA -->
+    <div class="main-wrapper">
+      <main class="main-container">
+        {% if messages %}
+        <ul class="messages">
+          {% for message in messages %}
+          <li class="{{ message.tags }}">{{ message }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var STORAGE_KEY = 'bb_low_stock_seen';
+      var bell = document.getElementById('notificationBellBtn');
+      var dropdown = document.getElementById('notificationDropdown');
+      var closeBtn = document.getElementById('closeNotifBtn');
+      var dot = document.getElementById('notificationDot');
+      if (!bell || !dropdown) return;
+
+      function alertKey() {
+        return bell.getAttribute('data-alert-key') || '';
+      }
+
+      function hideDotIfViewed() {
+        var key = alertKey();
+        if (!dot || !key) return;
+        if (localStorage.getItem(STORAGE_KEY) === key) {
+          dot.classList.add('is-hidden');
+        }
+      }
+
+      function markViewed() {
+        var key = alertKey();
+        if (key) localStorage.setItem(STORAGE_KEY, key);
+        if (dot) dot.classList.add('is-hidden');
+      }
+
+      bell.addEventListener('click', function (event) {
+        event.stopPropagation();
+        dropdown.classList.toggle('show');
+        if (dropdown.classList.contains('show')) {
+          markViewed();
+        }
+      });
+
+      if (closeBtn) {
+        closeBtn.addEventListener('click', function (event) {
+          event.stopPropagation();
+          dropdown.classList.remove('show');
+        });
+      }
+
+      document.addEventListener('click', function (event) {
+        if (dropdown.classList.contains('show') && !dropdown.contains(event.target) && !bell.contains(event.target)) {
+          dropdown.classList.remove('show');
+        }
+      });
+
+      hideDotIfViewed();
+    })();
+  </script>
+
+</body>
+
+</html>

@@ -1,0 +1,420 @@
+{% extends "inventory/base.html" %}
+{% block title_suffix %} — Admin Reports{% endblock %}
+{% block content %}
+
+<!-- PRINT HEADER (Only visible when printing) -->
+<div class="print-header">
+  <h2>BREADBASKET BAKESHOP — {{ report_type|upper }} REPORT</h2>
+  <p><strong>Period:</strong> {{ period|upper }} &nbsp;|&nbsp; <strong>Generated:</strong> {{ generated_at|date:"F j, Y, g:i a" }}</p>
+</div>
+
+<div class="report-tabs" role="tablist">
+  <a href="?type=inventory&period={{ period }}" class="report-tab-link {% if report_type == 'inventory' %}active{% endif %}">Inventory</a>
+  <a href="?type=expiration&period={{ period }}"
+    class="report-tab-link {% if report_type == 'expiration' %}active{% endif %}">Expiration</a>
+  <a href="?type=waste&period={{ period }}" class="report-tab-link {% if report_type == 'waste' %}active{% endif %}">Waste</a>
+  <a href="?type=production&period={{ period }}"
+    class="report-tab-link {% if report_type == 'production' %}active{% endif %}">Production</a>
+  <a href="?type=sales&period={{ period }}" class="report-tab-link {% if report_type == 'sales' %}active{% endif %}">Sales</a>
+</div>
+
+<div class="report-controls">
+  <div class="period-selector">
+    <a href="?type={{ report_type }}&period=today" class="period-link {% if period == 'today' %}active{% endif %}">Today</a>
+    <a href="?type={{ report_type }}&period=week" class="period-link {% if period == 'week' %}active{% endif %}">Weekly</a>
+    <a href="?type={{ report_type }}&period=month" class="period-link {% if period == 'month' %}active{% endif %}">Monthly</a>
+    <a href="?type={{ report_type }}&period=year" class="period-link {% if period == 'year' %}active{% endif %}">Yearly</a>
+    <a href="?type={{ report_type }}&period=all" class="period-link {% if period == 'all' %}active{% endif %}">All Time</a>
+  </div>
+  <button type="button" onclick="window.print()" class="btn btn-accent print-btn">
+    🖨️ Print Report
+  </button>
+</div>
+
+<!-- ========================================================================= -->
+<!-- REPORT 1: INVENTORY REPORT -->
+<!-- ========================================================================= -->
+{% if report_type == 'inventory' %}
+<div class="card-grid">
+  <div class="card">
+    <h3>Ingredients</h3>
+    <div class="value">{{ total_items }}</div>
+  </div>
+  <div class="card">
+    <h3>Low Stock</h3>
+    <div class="value" style="color:var(--alert-red);">{{ low_count }}</div>
+  </div>
+  <div class="card">
+    <h3>Out of Stock</h3>
+    <div class="value" style="color:var(--brand-dark);">{{ out_of_stock_count }}</div>
+  </div>
+</div>
+
+<div class="table-container">
+  <div class="table-header">
+    <span>Inventory</span>
+  </div>
+  <div class="table-scroll-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Ingredient</th>
+          <th>Current Stock</th>
+          <th>Min Safety Threshold</th>
+          <th>Stock Status</th>
+          <th>Last Restocked</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ing in ingredients %}
+        <tr>
+          <td><strong>{{ ing.name }}</strong></td>
+          <td><strong>{{ ing.stock }}</strong> {{ ing.unit }}</td>
+          <td>{{ ing.low_stock_threshold }} {{ ing.unit }}</td>
+          <td>
+            {% if ing.stock <= 0 %}
+              <span class="status-pill pill-red">OUT OF STOCK</span>
+            {% elif ing.is_low_stock %}
+              <span class="status-pill pill-red">LOW STOCK</span>
+            {% else %}
+              <span class="status-pill pill-green">SUFFICIENT</span>
+            {% endif %}
+          </td>
+          <td style="font-size:0.75rem; color:var(--text-muted);">
+            {{ ing.last_restocked_at|date:"Y-m-d H:i"|default:"Initial Seed" }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- REPORT 2: EXPIRATION REPORT -->
+<!-- ========================================================================= -->
+{% elif report_type == 'expiration' %}
+<div class="card-grid">
+  <div class="card">
+    <h3>Active</h3>
+    <div class="value" style="color:var(--price-green);">{{ active_count }}</div>
+  </div>
+  <div class="card">
+    <h3>Expiring Soon</h3>
+    <div class="value" style="color:#b45309;">{{ expiring_soon_count }}</div>
+  </div>
+  <div class="card">
+    <h3>Expired</h3>
+    <div class="value" style="color:var(--alert-red);">{{ expired_count }}</div>
+  </div>
+</div>
+
+<div class="table-container">
+  <div class="table-header">
+    <span>Expiration</span>
+  </div>
+  <div class="table-scroll-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Batch ID</th>
+          <th>Bread Product</th>
+          <th>Quantity</th>
+          <th>Bake Date</th>
+          <th>Expiration Date</th>
+          <th>Days Remaining</th>
+          <th>Expiration Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in batches %}
+        <tr>
+          <td><strong>B-{{ b.id }}</strong></td>
+          <td>{{ b.product.name }}</td>
+          <td>{{ b.quantity_produced }} pcs</td>
+          <td>{{ b.production_date|date:"Y-m-d" }}</td>
+          <td><strong>{{ b.expiration_date|date:"Y-m-d" }}</strong></td>
+          <td>
+            {% if b.days_remaining < 0 %}
+            <span style="color:var(--alert-red); font-weight:bold;">Expired {{ b.abs_days }} day(s) ago</span>
+            {% elif b.days_remaining == 0 %}
+            <span style="color:#b45309; font-weight:bold;">Expires Today</span>
+            {% else %}
+            <span style="color:var(--price-green);">{{ b.days_remaining }} day(s) left</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="status-pill {{ b.status_pill }}">{{ b.status_label|upper }}</span>
+          </td>
+          <td>
+            {% if b.status == 'expired' %}
+            {% if is_admin or is_baker %}
+            <form method="post" action="{% url 'log_waste' b.id %}" style="margin:0;">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;">
+                Waste
+              </button>
+            </form>
+            {% endif %}
+            {% else %}
+            <span style="color:var(--text-muted); font-size:0.75rem;">Normal</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" style="text-align:center; padding:20px;">No production batches on record.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- REPORT 3: WASTE REPORT -->
+<!-- ========================================================================= -->
+{% elif report_type == 'waste' %}
+<div class="card-grid">
+  <div class="card">
+    <h3>Units Lost</h3>
+    <div class="value" style="color:var(--alert-red);">{{ total_waste_units }}</div>
+  </div>
+  <div class="card">
+    <h3>Loss</h3>
+    <div class="value" style="color:var(--alert-red);">&#8369;{{ total_waste_loss|floatformat:2 }}</div>
+  </div>
+  <div class="card">
+    <h3>Entries</h3>
+    <div class="value">{{ waste_count }}</div>
+  </div>
+</div>
+
+<div class="table-container">
+  <div class="table-header">
+    <span>Waste</span>
+  </div>
+  <div class="table-scroll-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Batch ID</th>
+          <th>Bread Product</th>
+          <th>Quantity Lost</th>
+          <th>Unit Price</th>
+          <th>Estimated Loss</th>
+          <th>Production Date</th>
+          <th>Expiration Date</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in wasted_batches %}
+        <tr>
+          <td><strong>B-{{ b.id }}</strong></td>
+          <td>{{ b.product.name }}</td>
+          <td><strong style="color:var(--alert-red);">{{ b.waste_quantity }}</strong> pcs</td>
+          <td>&#8369;{{ b.product.unit_price }}</td>
+          <td style="color:var(--alert-red); font-weight:bold;">&#8369;{{ b.estimated_loss|floatformat:2 }}</td>
+          <td>{{ b.production_date|date:"Y-m-d" }}</td>
+          <td>{{ b.expiration_date|date:"Y-m-d" }}</td>
+          <td>
+            {% if b.status == 'wasted' %}
+            <span class="status-pill pill-red">WASTED</span>
+            {% else %}
+            <span class="status-pill pill-red">EXPIRED</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" style="text-align:center; padding:20px; color:var(--text-muted);">
+            No food waste logged in the system.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- REPORT 4: PRODUCTION REPORT -->
+<!-- ========================================================================= -->
+{% elif report_type == 'production' %}
+<div class="card-grid">
+  <div class="card">
+    <h3>Units Produced</h3>
+    <div class="value" style="color:var(--brand-dark);">{{ total_produced }}</div>
+  </div>
+  <div class="card">
+    <h3>Batches</h3>
+    <div class="value">{{ total_batches }}</div>
+  </div>
+</div>
+
+<div class="table-container" style="margin-bottom:20px;">
+  <div class="table-header">
+    <span>By Product</span>
+  </div>
+  <div class="table-scroll-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Bread Product</th>
+          <th>Total Batches</th>
+          <th>Total Quantity Produced</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in production_by_product %}
+        <tr>
+          <td><strong>{{ p.product__name }}</strong></td>
+          <td>{{ p.batch_count }}</td>
+          <td><strong style="color:var(--brand-dark);">{{ p.total_qty }}</strong> pcs</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="3" style="text-align:center; padding:15px;">No production records found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="table-container">
+  <div class="table-header">
+    <span>Batches</span>
+  </div>
+  <div class="table-scroll-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Batch ID</th>
+          <th>Bread Product</th>
+          <th>Quantity</th>
+          <th>Production Date</th>
+          <th>Expiration Date</th>
+          <th>Baker / Staff</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in batches %}
+        <tr>
+          <td><strong>B-{{ b.id }}</strong></td>
+          <td>{{ b.product.name }}</td>
+          <td><strong>{{ b.quantity_produced }}</strong> pcs</td>
+          <td>{{ b.production_date|date:"Y-m-d" }}</td>
+          <td>{{ b.expiration_date|date:"Y-m-d" }}</td>
+          <td>{{ b.baker.username|default:"Baker" }}</td>
+          <td>
+            {% if b.status == 'active' %}
+            <span class="status-pill pill-green">Active</span>
+            {% elif b.status == 'expired' %}
+            <span class="status-pill pill-red">Expired</span>
+            {% else %}
+            <span class="status-pill pill-red">Wasted</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" style="text-align:center; padding:15px;">No production batches recorded yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- REPORT 5: SALES REPORT -->
+<!-- ========================================================================= -->
+{% elif report_type == 'sales' %}
+<div class="card-grid">
+  <div class="card">
+    <h3>Revenue</h3>
+    <div class="value" style="color:var(--price-green);">&#8369;{{ total_revenue|floatformat:2 }}</div>
+  </div>
+  <div class="card">
+    <h3>Units Sold</h3>
+    <div class="value">{{ total_units }}</div>
+  </div>
+  <div class="card">
+    <h3>Average Sale</h3>
+    <div class="value">&#8369;{{ avg_transaction|floatformat:2 }}</div>
+  </div>
+</div>
+
+<div class="table-container" style="margin-bottom:20px;">
+  <div class="table-header">
+    <span>By Product</span>
+  </div>
+  <div class="table-scroll-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Bread Product</th>
+          <th>Total Units Sold</th>
+          <th>Total Revenue Generated</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in sales_by_product %}
+        <tr>
+          <td><strong>{{ s.product__name }}</strong></td>
+          <td>{{ s.total_units }} pcs</td>
+          <td style="color:var(--price-green); font-weight:bold;">&#8369;{{ s.total_sales|floatformat:2 }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="3" style="text-align:center; padding:15px;">No sales data available.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="table-container">
+  <div class="table-header">
+    <span>Transactions</span>
+  </div>
+  <div class="table-scroll-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Product</th>
+          <th>Units Sold</th>
+          <th>Unit Price</th>
+          <th>Total Amount</th>
+          <th>Recorded By</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in sales %}
+        <tr>
+          <td><strong>{{ s.sale_date|date:"Y-m-d" }}</strong></td>
+          <td>{{ s.product.name }}</td>
+          <td>{{ s.quantity_sold }} pcs</td>
+          <td>&#8369;{{ s.unit_price }}</td>
+          <td style="color:var(--price-green); font-weight:bold;">&#8369;{{ s.total_amount|floatformat:2 }}</td>
+          <td style="font-size:0.75rem; color:var(--text-muted);">{{ s.recorded_by.username|default:"System" }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" style="text-align:center; padding:15px;">No sales recorded yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endif %}
+
+{% endblock %}

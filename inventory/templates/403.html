@@ -1,0 +1,16 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>403 - Access Denied | BreadBasket</title>
+  <link rel="stylesheet" href="{% static 'inventory/css/style.css' %}">
+</head>
+<body style="display:flex; align-items:center; justify-content:center; height:100vh;">
+  <div class="access-denied-box" style="display:block; max-width: 480px;">
+    <h2>&#128683; 403 - Access Denied / Unauthorized</h2>
+    <p>Your current role does not have permission to view or execute actions in this module.</p>
+    <p style="margin-top:15px;"><a href="{% url 'ai_production' %}">Back to dashboard</a></p>
+  </div>
+</body>
+</html>

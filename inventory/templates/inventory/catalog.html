@@ -1,0 +1,110 @@
+{% extends "inventory/base.html" %}
+{% block content %}
+
+<div class="split-layout">
+  <div class="col-main table-container">
+    <div class="table-header"><span>Catalog</span></div>
+    <div class="table-scroll-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Bread Name</th>
+            <th>Price</th>
+            <th>Avg Sales</th>
+            <th>Recipe Formula</th>
+            {% if is_admin %}<th>Action</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for product in products %}
+          <tr>
+            <td><strong>{{ product.name }}</strong></td>
+            <td>&#8369;{{ product.unit_price }}</td>
+            <td>{{ product.avg_daily_sales }} units</td>
+            <td>
+              <small>
+                {% for item in product.recipe_items.all %}
+                  {{ item.ingredient.name }}: {{ item.quantity_per_unit }}{% if not forloop.last %}, {% endif %}
+                {% empty %}
+                  No ingredients set
+                {% endfor %}
+              </small>
+            </td>
+            {% if is_admin %}
+            <td>
+              <form method="post" action="{% url 'delete_product' product.id %}" style="margin:0;" onsubmit="return confirm('Delete this bread product from catalog?');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger">Delete</button>
+              </form>
+            </td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if is_admin %}
+  <div class="col-side card">
+    <h3>Add New Product</h3>
+    <form method="post" action="{% url 'add_product' %}">
+      {% csrf_token %}
+      <div class="form-group">
+        <label for="{{ product_form.name.id_for_label }}">Bread Name</label>
+        {{ product_form.name }}
+      </div>
+      <div class="form-group">
+        <label for="{{ product_form.category.id_for_label }}">Category (optional)</label>
+        {{ product_form.category }}
+      </div>
+      <div class="form-group">
+        <label for="{{ product_form.unit_price.id_for_label }}">Selling Price (&#8369;)</label>
+        {{ product_form.unit_price }}
+      </div>
+      <div class="form-group">
+        <label for="{{ product_form.shelf_life_days.id_for_label }}">Shelf Life (Days)</label>
+        {{ product_form.shelf_life_days }}
+      </div>
+      <div class="form-group">
+        <label for="{{ product_form.avg_daily_sales.id_for_label }}">Est. Daily Demand</label>
+        {{ product_form.avg_daily_sales }}
+      </div>
+
+      <div class="form-group">
+        <label>Recipe Ingredients</label>
+        <div id="recipe-builder-container"></div>
+        <button type="button" class="btn btn-accent" onclick="addIngredientRow()" style="margin-top:5px; font-size:0.75rem;">+ Add Ingredient</button>
+      </div>
+
+      <button type="submit" class="btn" style="width: 100%; margin-top: 10px;">Save Product</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+{% if is_admin %}
+<script>
+  const INGREDIENTS = [
+    {% for ing in ingredients %}{ id: {{ ing.id }}, name: "{{ ing.name|escapejs }}" }{% if not forloop.last %},{% endif %}{% endfor %}
+  ];
+
+  function addIngredientRow() {
+    const container = document.getElementById('recipe-builder-container');
+    const row = document.createElement('div');
+    row.className = 'recipe-builder-row';
+
+    const options = INGREDIENTS.map(i => `<option value="${i.id}">${i.name}</option>`).join('');
+    row.innerHTML = `
+      <select name="ingredient_id">${options}</select>
+      <input type="number" name="qty_per_unit" placeholder="Qty/unit" step="0.001" style="width: 90px;">
+      <button type="button" class="btn btn-danger" onclick="this.parentElement.remove()" style="padding:2px 6px;">&#10005;</button>
+    `;
+    container.appendChild(row);
+  }
+
+  window.addEventListener('DOMContentLoaded', addIngredientRow);
+</script>
+{% endif %}
+
+{% endblock %}

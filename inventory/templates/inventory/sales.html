@@ -1,0 +1,107 @@
+{% extends "inventory/base.html" %}
+{% block title_suffix %} — Sales{% endblock %}
+{% block content %}
+
+<div class="card-grid">
+  <div class="card">
+    <h3>Revenue</h3>
+    <div class="value" style="color:var(--price-green);">&#8369;{{ total_revenue|floatformat:2 }}</div>
+  </div>
+  <div class="card">
+    <h3>Units Sold</h3>
+    <div class="value">{{ total_units_sold }}</div>
+  </div>
+  <div class="card">
+    <h3>Transactions</h3>
+    <div class="value">{{ sales_records|length }}</div>
+  </div>
+</div>
+
+<div class="split-layout">
+  <div class="col-side card" style="height: fit-content;">
+    <h3 style="border-bottom: 2px solid var(--border-color); padding-bottom: 8px; margin-bottom: 14px;">
+      Log Sale
+    </h3>
+    <form method="post" action="{% url 'record_sale' %}">
+      {% csrf_token %}
+
+      <div class="form-group">
+        <label for="{{ sales_form.product.id_for_label }}">Product</label>
+        {{ sales_form.product }}
+      </div>
+
+      <div class="form-group">
+        <label for="{{ sales_form.sale_date.id_for_label }}">Date</label>
+        {{ sales_form.sale_date }}
+      </div>
+
+      <div class="form-group">
+        <label for="{{ sales_form.quantity_sold.id_for_label }}">Quantity</label>
+        {{ sales_form.quantity_sold }}
+      </div>
+
+      <button type="submit" class="btn" style="width: 100%; padding:10px; font-size:0.88rem; margin-top:6px;">
+        Save
+      </button>
+    </form>
+  </div>
+
+  <div class="col-main table-container">
+    <div class="table-header">
+      <span>Sales</span>
+    </div>
+    <div class="table-scroll-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Unit Price</th>
+            <th>Total</th>
+            <th>Logged By</th>
+            {% if is_admin or is_inventory %}
+            <th></th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% if sales_records %}
+            {% for sale in sales_records %}
+            <tr>
+              <td><strong>{{ sale.sale_date|date:"Y-m-d" }}</strong></td>
+              <td>{{ sale.product.name }}</td>
+              <td><strong>{{ sale.quantity_sold }}</strong></td>
+              <td>&#8369;{{ sale.unit_price }}</td>
+              <td style="color:var(--price-green); font-weight:bold;">
+                &#8369;{{ sale.total_amount|floatformat:2 }}
+              </td>
+              <td style="font-size:0.75rem; color:var(--text-muted);">
+                {{ sale.recorded_by.username|default:"—" }}
+              </td>
+              {% if is_admin or is_inventory %}
+              <td>
+                <form method="post" action="{% url 'delete_sale' sale.id %}" onsubmit="return confirm('Delete this sale?');" style="margin:0;">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-danger" style="padding:3px 8px; font-size:0.72rem;">
+                    Delete
+                  </button>
+                </form>
+              </td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="7" style="text-align:center; padding:24px; color:var(--text-muted);">
+                No sales recorded.
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
